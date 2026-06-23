@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -5,15 +6,22 @@ from pathlib import Path
 from typing import Optional
 
 from core.interfaces import BaseTranscriber, BaseSummarizer, BaseStorage
+from core.pipeline import PipelineStep, SessionPipeline
 from domain.models import Session, Metadata
 
 logger = logging.getLogger(__name__)
 
+@dataclass(frozen=True)
+class PipelineContext:
+    """Immutable data context passing state between pipeline steps."""
+    audio_path: Path
+    session: Session
+
 class SessionOrchestrator:
     """Orchestrates the AI session capture, transcription, summarization, and storage lifecycle.
 
-    This orchestrator depends exclusively on abstract interfaces and is isolated from
-    concrete implementation details like Faster-Whisper, Gemini, or local storage schemas.
+    This orchestrator coordinates the sequence of execution using a SessionPipeline, which
+    guarantees step isolated errors and execution tracing.
     """
 
     def __init__(
@@ -22,39 +30,55 @@ class SessionOrchestrator:
         summarizer: BaseSummarizer,
         storage: BaseStorage
     ):
-        """Construct the orchestrator with concrete dependencies injected."""
+        """Construct the orchestrator and configure its sequential steps."""
         self._transcriber = transcriber
         self._summarizer = summarizer
         self._storage = storage
 
-    def _capture_audio(self, audio_path: Path) -> str:
-        """Placeholder stage for capture.
+        # Define pipeline structure
+        self._pipeline = SessionPipeline()
+        self._pipeline.add_step(
+            PipelineStep("Transcription", self._transcribe_step)
+        ).add_step(
+            PipelineStep("Summarization", self._summarize_step)
+        ).add_step(
+            PipelineStep("Archiving", self._archive_step)
+        )
 
-        In a production app, this stage could perform validation on the audio file,
-        compute checksums, extract stream metadata, or copy/stream the file to raw storage.
-        """
+    def _capture_audio(self, audio_path: Path) -> str:
+        """Validation stage before entering the pipeline."""
         logger.info(f"[Capture Stage] Validating audio source at {audio_path}")
         if not audio_path.exists():
             raise FileNotFoundError(f"Audio source file does not exist: {audio_path}")
         
-        # Generate a unique session ID
         session_id = str(uuid.uuid4())
         logger.info(f"[Capture Stage] Generated session ID: {session_id}")
         return session_id
 
+    def _transcribe_step(self, context: PipelineContext) -> PipelineContext:
+        """Step action to execute audio transcription."""
+        transcript = self._transcriber.transcribe(context.audio_path)
+        updated_session = context.session.with_transcript(transcript)
+        return PipelineContext(audio_path=context.audio_path, session=updated_session)
+
+    def _summarize_step(self, context: PipelineContext) -> PipelineContext:
+        """Step action to execute text summarization."""
+        if not context.session.transcript:
+            raise ValueError("Summarization failed: Transcript is missing from session state.")
+        summary = self._summarizer.summarize(context.session.transcript)
+        updated_session = context.session.with_summary(summary)
+        return PipelineContext(audio_path=context.audio_path, session=updated_session)
+
+    def _archive_step(self, context: PipelineContext) -> PipelineContext:
+        """Step action to persist session to database storage."""
+        self._storage.save(context.session)
+        return context
+
     def run_pipeline(self, audio_path: Path, title: Optional[str] = None) -> Session:
-        """Run the complete transcription, summarization, and archiving pipeline.
-
-        Args:
-            audio_path: Path to the recorded audio session.
-            title: An optional user-friendly name for this session.
-
-        Returns:
-            The complete populated Session domain model.
-        """
+        """Run the complete pipeline over the configured session context."""
         logger.info("=== Starting AI Session Capture & Summarisation Pipeline ===")
 
-        # 1. Capture Stage
+        # 1. Capture setup
         session_id = self._capture_audio(audio_path)
         
         metadata = Metadata(
@@ -62,24 +86,12 @@ class SessionOrchestrator:
             title=title or audio_path.stem,
             created_at=datetime.now(timezone.utc)
         )
-        session = Session(session_id=session_id, metadata=metadata)
+        initial_session = Session(session_id=session_id, metadata=metadata)
 
-        # 2. Transcribe Stage
-        logger.info(f"[Transcription Stage] Transcribing audio from {audio_path}...")
-        transcript = self._transcriber.transcribe(audio_path)
-        session = session.with_transcript(transcript)
-        logger.info("[Transcription Stage] Completed successfully.")
-
-        # 3. Summarize Stage
-        logger.info("[Summarization Stage] Summarizing session transcript...")
-        summary = self._summarizer.summarize(transcript)
-        session = session.with_summary(summary)
-        logger.info("[Summarization Stage] Completed successfully.")
-
-        # 4. Archive Stage
-        logger.info(f"[Storage Stage] Archiving session {session_id} to database/storage...")
-        self._storage.save(session)
-        logger.info("[Storage Stage] Archiving completed successfully.")
+        # 2. Assemble context and execute sequential steps
+        initial_context = PipelineContext(audio_path=audio_path, session=initial_session)
+        final_context = self._pipeline.run(initial_context)
 
         logger.info(f"=== Pipeline completed successfully for session {session_id} ===")
-        return session
+        return final_context.session
+

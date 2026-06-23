@@ -1,4 +1,8 @@
+import json
 import logging
+import os
+from typing import List
+from pydantic import BaseModel, Field
 
 from core.interfaces import BaseSummarizer
 from core.registry import summarizer_registry
@@ -6,6 +10,13 @@ from domain.models import Transcript, Summary
 from domain.exceptions import SummarizerError
 
 logger = logging.getLogger(__name__)
+
+class GeminiSummarySchema(BaseModel):
+    """Pydantic schema to enforce structured JSON responses from Gemini."""
+    content: str = Field(description="A concise narrative summary of the main discussion and context.")
+    key_points: List[str] = Field(description="A bulleted list of the main key points discussed in the session.")
+    action_items: List[str] = Field(description="A list of concrete actionable items, tasks, and assignments.")
+    topics: List[str] = Field(description="List of key topics or categories covered in the session.")
 
 @summarizer_registry.register("gemini")
 class GeminiSummarizer(BaseSummarizer):
@@ -30,40 +41,60 @@ class GeminiSummarizer(BaseSummarizer):
         )
 
     def summarize(self, transcript: Transcript) -> Summary:
-        """Stub summarization logic converting a Transcript into a Summary.
-
-        In a future step, this will load the google-generativeai SDK and perform
-        actual API calls.
-        """
-        logger.info("Mock summarizing transcript using Gemini...")
+        """Summarize transcript using Gemini API with structured JSON output."""
+        logger.info(f"Summarizing transcript using Gemini model '{self.model_name}'...")
 
         try:
-            # Basic validation
-            if not transcript.raw_text:
+            # 1. Input validation
+            if not transcript.raw_text or not transcript.raw_text.strip():
                 raise ValueError("Transcript text is empty; nothing to summarize.")
 
-            # Return mock domain summary for the scaffold
+            # 2. Configure API key
+            resolved_key = self.api_key or os.getenv("GEMINI_API_KEY")
+            if not resolved_key:
+                raise ValueError(
+                    "Gemini API key is missing. Please provide it in the configuration "
+                    "or set the GEMINI_API_KEY environment variable."
+                )
+
+            import google.generativeai as genai
+            genai.configure(api_key=resolved_key)
+
+            # 3. Setup model with Pydantic JSON enforcement
+            model = genai.GenerativeModel(model_name=self.model_name)
+            
+            prompt = f"""
+            You are an expert executive assistant. Analyze the following transcript of a recorded meeting/session and generate a structured summary.
+
+            Transcript:
+            \"\"\"
+            {transcript.raw_text}
+            \"\"\"
+            """
+
+            # 4. Generate structured content
+            logger.info("Sending request to Google Generative AI API...")
+            response = model.generate_content(
+                prompt,
+                generation_config=genai.GenerationConfig(
+                    response_mime_type="application/json",
+                    response_schema=GeminiSummarySchema,
+                    temperature=self.temperature
+                )
+            )
+
+            if not response.text:
+                raise ValueError("Received empty response text from Gemini API.")
+
+            # 5. Parse and map to domain model
+            data = json.loads(response.text)
             return Summary(
-                content=(
-                    "This session discussed software architecture and modular systems design. "
-                    "The team aligned on using clean architecture principles, constructor-based "
-                    "dependency injection, and dynamic adapter registries to build a highly extensible "
-                    "Python codebase that can be maintained over a 5-year horizon."
-                ),
-                key_points=[
-                    "Clean architecture decouples core domain logic from Whisper/Gemini implementations.",
-                    "Constructor dependency injection facilitates simple unit testing.",
-                    "Adapter registries open the codebase to extensions without modifying existing code."
-                ],
-                action_items=[
-                    "Implement Faster-Whisper transcriber adapter in the next iteration.",
-                    "Implement Google Gemini API summarizer adapter in the next iteration.",
-                    "Write automated test cases in tests/ directory."
-                ],
-                topics=["Clean Architecture", "SOLID Principles", "Session Scaffolding"]
+                content=data.get("content", ""),
+                key_points=data.get("key_points", []),
+                action_items=data.get("action_items", []),
+                topics=data.get("topics", [])
             )
             
         except Exception as e:
             logger.error(f"Error during summarization: {e}")
-            # Wrap third-party and standard library exceptions into our custom domain exception
             raise SummarizerError(f"Summarization failed: {str(e)}") from e

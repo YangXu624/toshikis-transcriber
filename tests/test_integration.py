@@ -19,11 +19,21 @@ def test_complete_pipeline_integration(mocker, tmp_path, mock_audio_path):
     mock_info.language = "en"
     mock_whisper.return_value.transcribe.return_value = ([mock_segment], mock_info)
 
+    # Mock GenerativeModel in integration test to avoid real Google API calls
+    mock_gemini = mocker.patch("google.generativeai.GenerativeModel")
+    mock_gemini_response = mocker.MagicMock()
+    mock_gemini_response.text = (
+        '{"content": "This is an integrated summary", '
+        '"key_points": ["Point A"], "action_items": ["Action B"], '
+        '"topics": ["Topic C"]}'
+    )
+    mock_gemini.return_value.generate_content.return_value = mock_gemini_response
+
     # 1. Arrange: Create programmatic Settings override targeting the temporary path
     settings = Settings(
         app=AppConfig(environment="testing", log_level="DEBUG"),
         transcriber=TranscriberConfig(provider="faster_whisper", settings={}),
-        summarizer=SummarizerConfig(provider="gemini", settings={}),
+        summarizer=SummarizerConfig(provider="gemini", settings={"api_key": "test-key"}),
         storage=StorageConfig(provider="json", settings={"output_dir": str(tmp_path)})
     )
 
