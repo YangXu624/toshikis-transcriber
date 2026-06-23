@@ -4,11 +4,21 @@ from config.settings import Settings, AppConfig, TranscriberConfig, SummarizerCo
 from core.factory import AdapterFactory
 from core.orchestrator import SessionOrchestrator
 
-def test_complete_pipeline_integration(tmp_path, mock_audio_path):
+def test_complete_pipeline_integration(mocker, tmp_path, mock_audio_path):
     """Integration test checking that configuration -> factory -> orchestrator -> storage
 
     works end-to-end with the initial scaffolding.
     """
+    # Mock WhisperModel in integration test to avoid running PyTorch inference or downloading model weights
+    mock_whisper = mocker.patch("faster_whisper.WhisperModel")
+    mock_segment = mocker.MagicMock()
+    mock_segment.start = 0.0
+    mock_segment.end = 2.5
+    mock_segment.text = "Hello and welcome to this session."
+    mock_info = mocker.MagicMock()
+    mock_info.language = "en"
+    mock_whisper.return_value.transcribe.return_value = ([mock_segment], mock_info)
+
     # 1. Arrange: Create programmatic Settings override targeting the temporary path
     settings = Settings(
         app=AppConfig(environment="testing", log_level="DEBUG"),

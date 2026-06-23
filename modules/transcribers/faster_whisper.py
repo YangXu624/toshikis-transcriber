@@ -25,43 +25,63 @@ class FasterWhisperTranscriber(BaseTranscriber):
         self.model_size = model_size
         self.device = device
         self.compute_type = compute_type
+        self._model = None
         logger.info(
             f"FasterWhisperTranscriber initialized with model={model_size}, "
             f"device={device}, compute={compute_type}"
         )
 
-    def transcribe(self, audio_path: Path) -> Transcript:
-        """Stub transcription logic that converts audio into a domain Transcript.
+    @property
+    def model(self):
+        """Lazily initialize the WhisperModel to save memory and startup time."""
+        if self._model is None:
+            logger.info(f"Loading WhisperModel '{self.model_size}' on '{self.device}' with '{self.compute_type}'...")
+            try:
+                from faster_whisper import WhisperModel
+                self._model = WhisperModel(
+                    self.model_size,
+                    device=self.device,
+                    compute_type=self.compute_type
+                )
+            except Exception as e:
+                logger.error(f"Failed to load WhisperModel: {e}")
+                raise TranscriberError(f"Failed to load WhisperModel: {str(e)}") from e
+        return self._model
 
-        In a future step, this will load the faster_whisper library and perform
-        actual inference.
-        """
-        logger.info(f"Mock transcribing audio file: {audio_path}")
+    def transcribe(self, audio_path: Path) -> Transcript:
+        """Transcribe audio file using faster_whisper and return a domain Transcript."""
+        logger.info(f"Transcribing audio file: {audio_path}")
         
         try:
-            # Check for file existence to simulate basic transcription validation
             if not audio_path.exists():
                 raise FileNotFoundError(f"Audio file not found: {audio_path}")
 
-            # Return a mock domain transcript for the scaffold
-            segments = [
-                TranscriptSegment(
-                    start_time=0.0,
-                    end_time=2.5,
-                    text="Hello and welcome to this session.",
-                    speaker="Speaker 1"
-                ),
-                TranscriptSegment(
-                    start_time=2.5,
-                    end_time=6.0,
-                    text="Today we are discussing our software architecture plan.",
-                    speaker="Speaker 1"
+            # Get the loaded model (triggers lazy initialization)
+            model = self.model
+            
+            # Execute transcription (beam_size=5 is standard for transcription accuracy)
+            segments_iter, info = model.transcribe(str(audio_path), beam_size=5)
+            
+            segments = []
+            raw_text_parts = []
+            
+            # Consume generator from faster-whisper
+            for segment in segments_iter:
+                # Map to our domain model
+                seg = TranscriptSegment(
+                    start_time=segment.start,
+                    end_time=segment.end,
+                    text=segment.text.strip(),
+                    speaker=None  # basic whisper model does not diarize speakers
                 )
-            ]
-            raw_text = " ".join(seg.text for seg in segments)
-            return Transcript(raw_text=raw_text, segments=segments, language="en")
+                segments.append(seg)
+                raw_text_parts.append(seg.text)
+                
+            raw_text = " ".join(raw_text_parts)
+            language = info.language if info else None
+            
+            return Transcript(raw_text=raw_text, segments=segments, language=language)
             
         except Exception as e:
             logger.error(f"Error during transcription: {e}")
-            # Wrap third-party and standard library exceptions into our custom domain exception
             raise TranscriberError(f"Transcription failed: {str(e)}") from e
