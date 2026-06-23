@@ -1,0 +1,21 @@
+app:
+  environment: "development"
+  log_level: "INFO"
+
+transcriber:
+  provider: "faster_whisper"
+  faster_whisper:
+    model_size: "base"
+    device: "cpu"
+    compute_type: "int8"
+
+summarizer:
+  provider: "gemini"
+  gemini:
+    model_name: "gemini-1.5-flash"
+    temperature: 0.2
+
+storage:
+  provider: "json"
+  json:
+    output_dir: "./data"
