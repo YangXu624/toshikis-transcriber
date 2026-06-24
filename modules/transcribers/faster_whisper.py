@@ -48,9 +48,9 @@ class FasterWhisperTranscriber(BaseTranscriber):
                 raise TranscriberError(f"Failed to load WhisperModel: {str(e)}") from e
         return self._model
 
-    def transcribe(self, audio_path: Path) -> Transcript:
+    def transcribe(self, audio_path: Path, **kwargs) -> Transcript:
         """Transcribe audio file using faster_whisper and return a domain Transcript."""
-        logger.info(f"Transcribing audio file: {audio_path}")
+        logger.info(f"Transcribing audio file: {audio_path} with options {kwargs}")
         
         try:
             if not audio_path.exists():
@@ -60,7 +60,9 @@ class FasterWhisperTranscriber(BaseTranscriber):
             model = self.model
             
             # Execute transcription (beam_size=5 is standard for transcription accuracy)
-            segments_iter, info = model.transcribe(str(audio_path), beam_size=5)
+            transcribe_opts = {"beam_size": 5}
+            transcribe_opts.update(kwargs)
+            segments_iter, info = model.transcribe(str(audio_path), **transcribe_opts)
             
             segments = []
             raw_text_parts = []

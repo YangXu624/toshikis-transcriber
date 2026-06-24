@@ -1,5 +1,10 @@
-# Configuration
+# Configuration and Environment
 pyyaml>=6.0.1
+python-dotenv>=1.0.0
+
+# Transcription and AI Models
+faster-whisper>=1.0.0
+google-generativeai>=0.8.0
 
 # Development and Testing
 pytest>=8.0.0
