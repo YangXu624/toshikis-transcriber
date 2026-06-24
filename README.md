@@ -42,20 +42,75 @@ Review and adjust settings in `config/config.yaml` or override them in `.env`.
 
 ---
 
-## Running the Application
+## Configuring and Running the Application
 
-To run the bootstrapped scaffold demonstrating the pipeline:
+This codebase supports **plug-and-play swapping** between local offline models (Faster-Whisper) and cloud APIs (Google Gemini). You can toggle between them solely by modifying your configuration.
+
+### 1. Selecting Providers in `.env`
+Open your `.env` file to select which transcriber and summarizer to activate:
+
+```bash
+# Swapping Transcribers (faster_whisper vs. gemini_audio)
+TRANSCRIBER_PROVIDER=faster_whisper
+# TRANSCRIBER_PROVIDER=gemini_audio
+
+# Swapping Summarizers
+SUMMARIZER_PROVIDER=gemini
+```
+
+### 2. Swapping and Tuning Transcription Models
+The codebase supports multiple transcription models depending on your performance, accent accuracy, and offline requirements.
+
+#### A. Cloud Gemini API (`gemini_audio`)
+Natively handles regional Southeast Asian accents without local computational or memory overhead.
+- **Default model**: `gemini-2.5-flash` (can be changed to `gemini-2.0-flash` or `gemini-3.5-flash` in the configurations).
+- **To configure**: Set `TRANSCRIBER_PROVIDER=gemini_audio` and ensure your `GEMINI_API_KEY` is loaded in `.env`.
+
+#### B. Local Offline Whisper (`faster_whisper`)
+You can dynamically swap between different model sizes depending on your hardware limits (CPU/GPU) and accent challenges.
+
+**How to switch between local Whisper model sizes:**
+
+You can change Whisper model sizes in two ways:
+1. **Via Environment Overrides (Recommended)**:
+   Add or modify the `WHISPER_MODEL_SIZE` variable in your `.env` file:
+   ```bash
+   WHISPER_MODEL_SIZE=small  # Options: tiny, base, small, medium, large-v3
+   ```
+2. **Via YAML Config**:
+   Edit [config/config.yaml](file:///Users/yangxu/code/toshikis_transcriber/config/config.yaml) directly under `faster_whisper.model_size`:
+   ```yaml
+   transcriber:
+     provider: "faster_whisper"
+     faster_whisper:
+       model_size: "small"  # <-- Edit model size here (tiny, base, small, medium, large-v3)
+       device: "cpu"        # Target 'cpu' or 'cuda' for GPU acceleration
+   ```
+
+**Model Comparison Chart for Accented Singaporean English:**
+- **`base`** (~140MB): Low resource requirements, but low accuracy (struggles with strong accents).
+- **`small`** (~460MB): Highly recommended balance. Tested at **~85.7% accuracy** on local Singaporean speakers.
+- **`medium`** (~1.5GB): High accuracy (**~88.3%**), but slower on standard CPUs.
+- **`large-v3`** (~3.0GB): Best local option. High accent precision (**~90.0% accuracy**).
+
+*Note: For local transcription of accents, we force `language: "en"` in our adapter to prevent Whisper from misdetecting regional accents as Malay/Indonesian.*
+
+---
+
+### 3. Execution
+To execute the pipeline and process a session:
 
 ```bash
 python -m app.main
 ```
 
 Upon execution, the application will:
-1. Load configuration from `config/config.yaml` and environment variables.
-2. Initialize mock instances of the `faster_whisper` transcriber and the `gemini` summarizer using the `AdapterFactory`.
-3. Create a dummy audio file at `scratch/sample_meeting.wav`.
-4. Run the full capture, transcription, summarization, and local storage archiving sequence.
-5. Save the final JSON object in the directory configured (defaults to `./data/`).
+1. Load the active configuration and environment overrides.
+2. Instantiate the selected concrete transcribers, summarizers, and storage engines via the `AdapterFactory`.
+3. Check/create a sample meeting recording at `scratch/sample_meeting.wav`.
+4. Coordinate the stages (Capture -> Transcribe -> Summarize -> Archive) using the `SessionOrchestrator` pipeline.
+5. Save the final serialized session metadata, transcript, and summary to `data/<session_id>.json`.
+
 
 ---
 

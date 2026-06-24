@@ -36,7 +36,6 @@ ehthumbs.db
 Thumbs.db
 
 # Scratch and Temporary Test Data
-scratch/sample_meeting.wav
 scratch/__pycache__/
 # If you want to prevent committing the test audio files, uncomment below:
 # scratch/*.mp3

@@ -76,43 +76,58 @@ The flow of data and dependencies is strictly **inward** toward the core domain.
 
 ---
 
-## 4. Extension Points (Adding a New Adapter)
+## 4. Extension Points & Plug-and-Play Modularity
 
-The system utilizes an **Adapter Registry** and **Decorators** to make adding new adapters seamless without modifying the core Orchestrator or Factory logic.
+The system utilizes an **Adapter Registry** and **Decorators** to make swapping and adding new adapters seamless. You can switch between local processing (e.g. CPU/GPU offline models) and cloud APIs (e.g. Google Gemini, OpenAI) with zero code modifications to the core Orchestrator or Factory.
 
-### Steps to replace/add a Summarizer (e.g., replacing Gemini with OpenAI):
+### Showcase: Swapping Transcription Providers (Local vs. Cloud)
+
+We have two fully implemented transcribers that can be swapped dynamically:
+1. **FasterWhisperTranscriber** (`faster_whisper`): Performs offline transcription locally. It supports loading different model sizes (`base`, `small`, `medium`, `large-v3`) onto CPU or GPU (CUDA), and supports optimized parameters like language-forcing and brand-spelling context prompts to handle strong regional accents.
+2. **GeminiAudioTranscriber** (`gemini_audio`): Performs serverless cloud-based multimodal transcription via the Google Gemini API. It uses model `gemini-2.5-flash` to transcribe accented speech natively with high semantic accuracy.
+
+To swap between them, no business logic changes are needed. You only modify the configuration values.
+
+---
+
+### Steps to Register a New Adapter (e.g., adding `OpenAISummarizer`):
 
 1. **Create the Adapter File**:
-   Create `modules/summarizers/openai.py`.
-
-2. **Implement the Interface & Register**:
+   Create a class implementing the interface (`BaseSummarizer`) in `modules/summarizers/openai.py` and register it with the decorator:
    ```python
    from core.interfaces import BaseSummarizer
    from core.registry import summarizer_registry
    from domain.models import Transcript, Summary
 
-   @summarizer_registry.register("openai")
+   @summarizer_registry.register("openai")  # Registers under the key "openai"
    class OpenAISummarizer(BaseSummarizer):
        def __init__(self, api_key: str, model_name: str):
            self.api_key = api_key
            self.model_name = model_name
 
        def summarize(self, transcript: Transcript) -> Summary:
-           # Implementation of OpenAI API call...
+           # Call OpenAI API, map response to domain Summary model, and return it.
            pass
    ```
 
+2. **Expose the Module**:
+   Add the import statement in `modules/summarizers/__init__.py` to ensure the decorator executes on boot:
+   ```python
+   from .openai import OpenAISummarizer
+   ```
+
 3. **Update Settings & Config**:
-   Update `config.yaml` to reference the new identifier and configure any new parameters:
+   Update `config.yaml` to reference the new identifier and configure its parameters:
    ```yaml
    summarizer:
      provider: "openai"
      openai:
-       api_key: "${OPENAI_API_KEY}"
        model_name: "gpt-4o"
    ```
-
-No core code modifications are required in `core/orchestrator.py`, `core/pipeline.py`, or `core/factory.py`.
+   Provide the credentials in `.env`:
+   ```bash
+   OPENAI_API_KEY=sk-...
+   ```
 
 ---
 
