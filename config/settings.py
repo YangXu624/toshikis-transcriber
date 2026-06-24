@@ -61,6 +61,9 @@ def load_settings(config_path: Optional[Path] = None) -> Settings:
     if trans_provider == "faster_whisper":
         trans_settings["model_size"] = os.getenv("WHISPER_MODEL_SIZE", trans_settings.get("model_size", "base"))
         trans_settings["device"] = os.getenv("WHISPER_DEVICE", trans_settings.get("device", "cpu"))
+    elif trans_provider == "gemini_audio":
+        trans_settings["api_key"] = os.getenv("GEMINI_API_KEY", trans_settings.get("api_key", ""))
+        trans_settings["model_name"] = os.getenv("GEMINI_MODEL_NAME", trans_settings.get("model_name", "gemini-2.5-flash"))
 
     trans_config = TranscriberConfig(provider=trans_provider, settings=trans_settings)
 
@@ -71,7 +74,7 @@ def load_settings(config_path: Optional[Path] = None) -> Settings:
     # Inject API Keys from environment
     if sum_provider == "gemini":
         sum_settings["api_key"] = os.getenv("GEMINI_API_KEY", sum_settings.get("api_key", ""))
-        sum_settings["model_name"] = os.getenv("GEMINI_MODEL_NAME", sum_settings.get("model_name", "gemini-1.5-flash"))
+        sum_settings["model_name"] = os.getenv("GEMINI_MODEL_NAME", sum_settings.get("model_name", "gemini-2.5-flash"))
 
     sum_config = SummarizerConfig(provider=sum_provider, settings=sum_settings)
 
