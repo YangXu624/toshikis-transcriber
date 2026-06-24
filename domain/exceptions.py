@@ -18,6 +18,10 @@ class SummarizerError(DomainException):
     """Raised when summarization fails inside an adapter."""
     pass
 
+class StructurizerError(DomainException):
+    """Raised when structuring fails inside an adapter."""
+    pass
+
 class StorageError(DomainException):
     """Raised when storage load/save operations fail."""
     pass

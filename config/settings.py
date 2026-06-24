@@ -20,6 +20,11 @@ class SummarizerConfig:
     settings: Dict[str, Any] = field(default_factory=dict)
 
 @dataclass
+class StructurizerConfig:
+    provider: str = "gemini"
+    settings: Dict[str, Any] = field(default_factory=dict)
+
+@dataclass
 class StorageConfig:
     provider: str = "json"
     settings: Dict[str, Any] = field(default_factory=dict)
@@ -28,6 +33,7 @@ class StorageConfig:
 class Settings:
     app: AppConfig = field(default_factory=AppConfig)
     transcriber: TranscriberConfig = field(default_factory=TranscriberConfig)
+    structurizer: StructurizerConfig = field(default_factory=StructurizerConfig)
     summarizer: SummarizerConfig = field(default_factory=SummarizerConfig)
     storage: StorageConfig = field(default_factory=StorageConfig)
 
@@ -78,6 +84,16 @@ def load_settings(config_path: Optional[Path] = None) -> Settings:
 
     sum_config = SummarizerConfig(provider=sum_provider, settings=sum_settings)
 
+    # Build StructurizerConfig
+    structurizer_data = yaml_data.get("structurizer", {})
+    struct_provider = os.getenv("STRUCTURIZER_PROVIDER", structurizer_data.get("provider", "gemini"))
+    struct_settings = structurizer_data.get(struct_provider, {})
+    if struct_provider == "gemini":
+        struct_settings["api_key"] = os.getenv("GEMINI_API_KEY", struct_settings.get("api_key", ""))
+        struct_settings["model_name"] = os.getenv("GEMINI_MODEL_NAME", struct_settings.get("model_name", "gemini-2.5-flash"))
+
+    struct_config = StructurizerConfig(provider=struct_provider, settings=struct_settings)
+
     # Build StorageConfig
     storage_data = yaml_data.get("storage", {})
     stor_provider = os.getenv("STORAGE_PROVIDER", storage_data.get("provider", "json"))
@@ -90,6 +106,7 @@ def load_settings(config_path: Optional[Path] = None) -> Settings:
     return Settings(
         app=app_config,
         transcriber=trans_config,
+        structurizer=struct_config,
         summarizer=sum_config,
         storage=stor_config
     )

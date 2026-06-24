@@ -40,6 +40,8 @@ class Session:
     session_id: str
     metadata: Metadata
     transcript: Optional[Transcript] = None
+    presentation_text: Optional[str] = None
+    structured_qa_text: Optional[str] = None
     summary: Optional[Summary] = None
 
     def with_transcript(self, transcript: Transcript) -> 'Session':
@@ -48,6 +50,19 @@ class Session:
             session_id=self.session_id,
             metadata=self.metadata,
             transcript=transcript,
+            presentation_text=self.presentation_text,
+            structured_qa_text=self.structured_qa_text,
+            summary=self.summary
+        )
+
+    def with_structure(self, presentation_text: str, structured_qa_text: str) -> 'Session':
+        """Return a new Session instance with the structure updated."""
+        return Session(
+            session_id=self.session_id,
+            metadata=self.metadata,
+            transcript=self.transcript,
+            presentation_text=presentation_text,
+            structured_qa_text=structured_qa_text,
             summary=self.summary
         )
 
@@ -57,5 +72,7 @@ class Session:
             session_id=self.session_id,
             metadata=self.metadata,
             transcript=self.transcript,
+            presentation_text=self.presentation_text,
+            structured_qa_text=self.structured_qa_text,
             summary=summary
         )

@@ -1,13 +1,14 @@
 import logging
 from typing import Dict, Any
 
-from core.interfaces import BaseTranscriber, BaseSummarizer, BaseStorage
-from core.registry import transcriber_registry, summarizer_registry, storage_registry
+from core.interfaces import BaseTranscriber, BaseSummarizer, BaseStorage, BaseStructurizer
+from core.registry import transcriber_registry, summarizer_registry, storage_registry, structurizer_registry
 
 # Import all modules to trigger decorator-based registration
 import modules.transcribers  # noqa: F401
 import modules.summarizers  # noqa: F401
 import modules.storage      # noqa: F401
+import modules.structurizers  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,13 @@ class AdapterFactory:
         """Instantiate a transcriber based on provider name and constructor configuration."""
         logger.info(f"Instantiating Transcriber provider: '{provider}'")
         adapter_cls = transcriber_registry.get(provider)
+        return adapter_cls(**settings)
+
+    @staticmethod
+    def create_structurizer(provider: str, settings: Dict[str, Any]) -> BaseStructurizer:
+        """Instantiate a structurizer based on provider name and constructor configuration."""
+        logger.info(f"Instantiating Structurizer provider: '{provider}'")
+        adapter_cls = structurizer_registry.get(provider)
         return adapter_cls(**settings)
 
     @staticmethod

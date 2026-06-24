@@ -7,16 +7,16 @@ from pathlib import Path
 project_root = Path(__file__).resolve().parent.parent
 sys.path.append(str(project_root))
 
-from modules.transcribers.faster_whisper import FasterWhisperTranscriber
+from modules.transcribers.gemini_audio import GeminiAudioTranscriber
 
 def normalize_text(text: str) -> list[str]:
     """Standardize text to remove formatting variations, typos in references, and punctuation."""
     text = text.lower()
     
-    # 1. Correct spelling typos in the reference files so Whisper is not penalized
+    # 1. Correct spelling typos in reference files
     text = text.replace("rythmn", "rhythm")
     text = text.replace("whch", "which")
-    text = text.replace("gonna", "going to")  # Standardize colloquial contraction
+    text = text.replace("gonna", "going to")  # Standardize contraction
     
     # 2. Convert hyphens/dashes to spaces (so 'eco-friendly' matches 'eco friendly')
     text = text.replace("-", " ")
@@ -34,7 +34,7 @@ def normalize_text(text: str) -> list[str]:
     return text.split()
 
 def calculate_wer(reference: str, hypothesis: str) -> float:
-    """Calculate the Word Error Rate (WER) between normalized reference and hypothesis text."""
+    """Calculate the Word Error Rate (WER) between reference and hypothesis text."""
     ref_words = normalize_text(reference)
     hyp_words = normalize_text(hypothesis)
     
@@ -61,36 +61,42 @@ def calculate_wer(reference: str, hypothesis: str) -> float:
     return d[len(ref_words)][len(hyp_words)] / len(ref_words)
 
 def main():
-    scratch_dir = Path(__file__).parent
+    # Load environment variables manually from .env
+    env_path = project_root / ".env"
+    if env_path.exists():
+        with open(env_path, "r") as f:
+            for line in f:
+                line = line.strip()
+                if "=" in line and not line.startswith("#"):
+                    k, v = line.split("=", 1)
+                    os.environ[k.strip()] = v.strip()
+
+    input_dir = project_root / "modules" / "transcribers" / "input"
+    output_dir = project_root / "modules" / "transcribers" / "output"
     test_cases = ["cassie", "nicholas", "suzanne", "yangxu"]
 
-    # Read model size from args, default to "base"
-    model_size = sys.argv[1] if len(sys.argv) > 1 else "base"
-    
+    model_name = "gemini-2.5-flash"
     print("=" * 70)
-    print(f"Loading Faster-Whisper Model '{model_size}' on CPU...")
+    print(f"Loading Gemini Audio Transcriber using '{model_name}'...")
     print("=" * 70)
     
     try:
         # Initialize transcriber
-        transcriber = FasterWhisperTranscriber(model_size=model_size, device="cpu")
+        transcriber = GeminiAudioTranscriber(model_name=model_name)
     except Exception as e:
-        print(f"Failed to initialize FasterWhisperTranscriber: {e}")
+        print(f"Failed to initialize GeminiAudioTranscriber: {e}")
         sys.exit(1)
 
     print("\n" + "=" * 70)
-    print(f"RUNNING STANDARDIZED EVALUATION ON '{model_size.upper()}'")
+    print(f"RUNNING STANDARDIZED EVALUATION ON GEMINI API")
     print("=" * 70)
 
     overall_wer_sum = 0
     valid_cases = 0
 
-    # Brand keywords
-    initial_prompt = "Agoda, Eco Voyage, Binjai Consulting Group, solo travelers, Ago Local, travel bookers."
-
     for name in test_cases:
-        audio_file = scratch_dir / f"{name}.mp3"
-        txt_file = scratch_dir / f"{name}.txt"
+        audio_file = input_dir / f"{name}.mp3"
+        txt_file = output_dir / f"{name}.txt"
 
         if not audio_file.exists() or not txt_file.exists():
             continue
@@ -104,14 +110,8 @@ def main():
 
         # Run transcription
         try:
-            model = transcriber.model
-            segments_iter, info = model.transcribe(
-                str(audio_file),
-                beam_size=5,
-                language="en",
-                initial_prompt=initial_prompt
-            )
-            hyp_text = " ".join(seg.text.strip() for seg in segments_iter)
+            transcript = transcriber.transcribe(audio_file)
+            hyp_text = transcript.raw_text.strip()
         except Exception as e:
             print(f"Error transcribing {audio_file.name}: {e}")
             continue
@@ -132,7 +132,7 @@ def main():
         avg_wer = overall_wer_sum / valid_cases
         avg_accuracy = max(0.0, 1.0 - avg_wer)
         print("\n" + "=" * 70)
-        print(f"STANDARDIZED SUMMARY FOR '{model_size.upper()}' model")
+        print(f"STANDARDIZED SUMMARY FOR GEMINI API")
         print("=" * 70)
         print(f"Average Word Error Rate (WER): {avg_wer:.2%}")
         print(f"Average System Accuracy:       {avg_accuracy:.2%}")

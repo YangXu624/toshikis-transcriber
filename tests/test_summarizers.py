@@ -25,7 +25,7 @@ def test_gemini_scaffold_summarizes_correctly(mocker, sample_transcript):
     summarizer = GeminiSummarizer(api_key="test-key", model_name="gemini-1.5-flash")
 
     # When
-    summary = summarizer.summarize(sample_transcript)
+    summary = summarizer.summarize(sample_transcript.raw_text)
 
     # Then
     assert summary.content == "This is a summary"
@@ -38,11 +38,11 @@ def test_gemini_scaffold_summarizes_correctly(mocker, sample_transcript):
 def test_gemini_scaffold_raises_summarizer_error_on_empty_transcript():
     # Given
     summarizer = GeminiSummarizer(api_key="test-key")
-    empty_transcript = Transcript(raw_text="")
+    empty_text = ""
 
     # When / Then
     with pytest.raises(SummarizerError) as exc_info:
-        summarizer.summarize(empty_transcript)
+        summarizer.summarize(empty_text)
 
     assert "Summarization failed" in str(exc_info.value)
 
@@ -54,7 +54,7 @@ def test_gemini_raises_error_on_missing_api_key(mocker, sample_transcript):
 
     # When / Then
     with pytest.raises(SummarizerError) as exc_info:
-        summarizer.summarize(sample_transcript)
+        summarizer.summarize(sample_transcript.raw_text)
         
     assert "Gemini API key is missing" in str(exc_info.value)
 

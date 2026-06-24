@@ -26,17 +26,35 @@ class BaseSummarizer(ABC):
     """Interface for summarization adapters."""
 
     @abstractmethod
-    def summarize(self, transcript: Transcript) -> Summary:
-        """Generate a summary of the provided transcript.
+    def summarize(self, text: str) -> Summary:
+        """Generate a summary of the provided text.
 
         Args:
-            transcript: The transcript data to summarize.
+            text: The text content to summarize.
 
         Returns:
             A Summary object containing content, key points, etc.
 
         Raises:
             SummarizerError: If the summarization process fails.
+        """
+        pass
+
+class BaseStructurizer(ABC):
+    """Interface for structure layer adapters."""
+
+    @abstractmethod
+    def structurize(self, transcript: Transcript) -> tuple[str, str]:
+        """Separate Q&A from the main presentation and label Q&A.
+
+        Args:
+            transcript: The raw transcript to structure.
+
+        Returns:
+            A tuple of (presentation_text, structured_qa_text).
+
+        Raises:
+            StructurizerError: If the structuring process fails.
         """
         pass
 

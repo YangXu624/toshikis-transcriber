@@ -29,25 +29,25 @@ class GeminiSummarizer(BaseSummarizer):
     def __init__(
         self,
         api_key: str = "",
-        model_name: str = "gemini-2.5-flash",
+        model_name: str = "",
         temperature: float = 0.2
     ):
         self.api_key = api_key
-        self.model_name = model_name
+        self.model_name = model_name or os.getenv("GEMINI_MODEL_NAME", "gemini-2.5-flash")
         self.temperature = temperature
         logger.info(
-            f"GeminiSummarizer initialized with model={model_name}, "
+            f"GeminiSummarizer initialized with model={self.model_name}, "
             f"temperature={temperature}, api_key_length={len(api_key)}"
         )
 
-    def summarize(self, transcript: Transcript) -> Summary:
-        """Summarize transcript using Gemini API with structured JSON output."""
-        logger.info(f"Summarizing transcript using Gemini model '{self.model_name}'...")
+    def summarize(self, text: str) -> Summary:
+        """Summarize structured Q&A answers using Gemini API with structured JSON output."""
+        logger.info(f"Summarizing text using Gemini model '{self.model_name}'...")
 
         try:
             # 1. Input validation
-            if not transcript.raw_text or not transcript.raw_text.strip():
-                raise ValueError("Transcript text is empty; nothing to summarize.")
+            if not text or not text.strip():
+                raise ValueError("Input text is empty; nothing to summarize.")
 
             # 2. Configure API key
             resolved_key = self.api_key or os.getenv("GEMINI_API_KEY")
@@ -64,11 +64,15 @@ class GeminiSummarizer(BaseSummarizer):
             model = genai.GenerativeModel(model_name=self.model_name)
             
             prompt = f"""
-            You are an expert executive assistant. Analyze the following transcript of a recorded meeting/session and generate a structured summary.
+            You are an expert executive assistant. Analyze the following structured Q&A text and generate a structured summary.
 
-            Transcript:
+            CRITICAL CONSTRAINTS:
+            - You must summarize ONLY the answers to the questions (usually labeled with '[Answer]:' or provided by the presenting team).
+            - Do NOT summarize the main presentation section or the questions themselves. Focus purely on capturing and summarizing the responses and key information provided in the answers.
+
+            Structured Q&A Text:
             \"\"\"
-            {transcript.raw_text}
+            {text}
             \"\"\"
             """
 

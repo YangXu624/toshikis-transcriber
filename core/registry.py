@@ -1,6 +1,6 @@
 from typing import Dict, Type, Generic, TypeVar
 from domain.exceptions import RegistryError
-from core.interfaces import BaseTranscriber, BaseSummarizer, BaseStorage
+from core.interfaces import BaseTranscriber, BaseSummarizer, BaseStorage, BaseStructurizer
 
 T = TypeVar('T')
 
@@ -36,4 +36,5 @@ class AdapterRegistry(Generic[T]):
 # Registry instances for each module type
 transcriber_registry: AdapterRegistry[BaseTranscriber] = AdapterRegistry("Transcribers")
 summarizer_registry: AdapterRegistry[BaseSummarizer] = AdapterRegistry("Summarizers")
+structurizer_registry: AdapterRegistry[BaseStructurizer] = AdapterRegistry("Structurizers")
 storage_registry: AdapterRegistry[BaseStorage] = AdapterRegistry("Storage")

@@ -30,7 +30,7 @@ def test_orchestrator_pipeline_success(
     
     # Assert coordinates were called with appropriate types/arguments
     assert stub_transcriber.called_with == mock_audio_path
-    assert stub_summarizer.called_with == sample_transcript
+    assert stub_summarizer.called_with == sample_transcript.raw_text
     assert stub_storage.saved_session == session
     
     # Assert session payload is correct

@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from core.interfaces import BaseTranscriber, BaseSummarizer, BaseStorage
+from core.interfaces import BaseTranscriber, BaseSummarizer, BaseStorage, BaseStructurizer
 from core.pipeline import PipelineStep, SessionPipeline
 from domain.models import Session, Metadata
 
@@ -28,18 +28,25 @@ class SessionOrchestrator:
         self,
         transcriber: BaseTranscriber,
         summarizer: BaseSummarizer,
-        storage: BaseStorage
+        storage: BaseStorage,
+        structurizer: Optional[BaseStructurizer] = None
     ):
         """Construct the orchestrator and configure its sequential steps."""
         self._transcriber = transcriber
         self._summarizer = summarizer
         self._storage = storage
+        self._structurizer = structurizer
 
         # Define pipeline structure
         self._pipeline = SessionPipeline()
         self._pipeline.add_step(
             PipelineStep("Transcription", self._transcribe_step)
-        ).add_step(
+        )
+        if self._structurizer is not None:
+            self._pipeline.add_step(
+                PipelineStep("Structuring", self._structurize_step)
+            )
+        self._pipeline.add_step(
             PipelineStep("Summarization", self._summarize_step)
         ).add_step(
             PipelineStep("Archiving", self._archive_step)
@@ -61,11 +68,24 @@ class SessionOrchestrator:
         updated_session = context.session.with_transcript(transcript)
         return PipelineContext(audio_path=context.audio_path, session=updated_session)
 
+    def _structurize_step(self, context: PipelineContext) -> PipelineContext:
+        """Step action to execute text structuring."""
+        if not context.session.transcript:
+            raise ValueError("Structuring failed: Transcript is missing from session state.")
+        pres_text, qa_text = self._structurizer.structurize(context.session.transcript)
+        updated_session = context.session.with_structure(pres_text, qa_text)
+        return PipelineContext(audio_path=context.audio_path, session=updated_session)
+
     def _summarize_step(self, context: PipelineContext) -> PipelineContext:
         """Step action to execute text summarization."""
-        if not context.session.transcript:
-            raise ValueError("Summarization failed: Transcript is missing from session state.")
-        summary = self._summarizer.summarize(context.session.transcript)
+        if context.session.structured_qa_text:
+            text_to_summarize = context.session.structured_qa_text
+        else:
+            if not context.session.transcript:
+                raise ValueError("Summarization failed: Transcript is missing from session state.")
+            text_to_summarize = context.session.transcript.raw_text
+
+        summary = self._summarizer.summarize(text_to_summarize)
         updated_session = context.session.with_summary(summary)
         return PipelineContext(audio_path=context.audio_path, session=updated_session)
 

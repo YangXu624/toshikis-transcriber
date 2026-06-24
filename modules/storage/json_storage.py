@@ -41,6 +41,8 @@ class LocalJsonStorage(BaseStorage):
                     "extra_info": session.metadata.extra_info,
                 },
                 "transcript": None,
+                "presentation_text": session.presentation_text,
+                "structured_qa_text": session.structured_qa_text,
                 "summary": None
             }
 
@@ -68,6 +70,15 @@ class LocalJsonStorage(BaseStorage):
 
             with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=4, ensure_ascii=False)
+                
+            # Write presentation and structured Q&A to separate text files
+            if session.presentation_text is not None:
+                pres_file = self.output_dir / f"{session.session_id}_presentation.txt"
+                pres_file.write_text(session.presentation_text, encoding="utf-8")
+                
+            if session.structured_qa_text is not None:
+                qa_file = self.output_dir / f"{session.session_id}_q_and_a.txt"
+                qa_file.write_text(session.structured_qa_text, encoding="utf-8")
                 
         except Exception as e:
             logger.error(f"Failed to save session {session.session_id}: {e}")
@@ -129,6 +140,8 @@ class LocalJsonStorage(BaseStorage):
                 session_id=data["session_id"],
                 metadata=metadata,
                 transcript=transcript,
+                presentation_text=data.get("presentation_text"),
+                structured_qa_text=data.get("structured_qa_text"),
                 summary=summary
             )
 

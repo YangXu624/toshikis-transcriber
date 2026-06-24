@@ -72,8 +72,8 @@ class StubSummarizer(BaseSummarizer):
         self.summary_to_return = summary_to_return
         self.called_with = None
 
-    def summarize(self, transcript: Transcript) -> Summary:
-        self.called_with = transcript
+    def summarize(self, text: str) -> Summary:
+        self.called_with = text
         return self.summary_to_return
 
 class StubStorage(BaseStorage):
