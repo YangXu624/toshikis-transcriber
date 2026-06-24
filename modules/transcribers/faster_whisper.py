@@ -48,9 +48,9 @@ class FasterWhisperTranscriber(BaseTranscriber):
                 raise TranscriberError(f"Failed to load WhisperModel: {str(e)}") from e
         return self._model
 
-    def transcribe(self, audio_path: Path, **kwargs) -> Transcript:
+    def transcribe(self, audio_path: Path, language: Optional[str] = None, **kwargs) -> Transcript:
         """Transcribe audio file using faster_whisper and return a domain Transcript."""
-        logger.info(f"Transcribing audio file: {audio_path} with options {kwargs}")
+        logger.info(f"Transcribing audio file: {audio_path} with language={language}, options={kwargs}")
         
         try:
             if not audio_path.exists():
@@ -61,12 +61,16 @@ class FasterWhisperTranscriber(BaseTranscriber):
             
             # Execute transcription (beam_size=5 is standard for transcription accuracy)
             transcribe_opts = {"beam_size": 5}
+            if language is not None:
+                transcribe_opts["language"] = language
             transcribe_opts.update(kwargs)
             segments_iter, info = model.transcribe(str(audio_path), **transcribe_opts)
             
             segments = []
             raw_text_parts = []
             
+            duration = info.duration if info else None
+            last_print_time = 0.0
             # Consume generator from faster-whisper
             for segment in segments_iter:
                 # Map to our domain model
@@ -78,6 +82,25 @@ class FasterWhisperTranscriber(BaseTranscriber):
                 )
                 segments.append(seg)
                 raw_text_parts.append(seg.text)
+                
+                try:
+                    if duration and isinstance(duration, (int, float)) and isinstance(segment.end, (int, float)):
+                        percent = min(100.0, (segment.end / duration) * 100)
+                        import time
+                        current_time = time.time()
+                        # Rate limit printing to once every 0.1 seconds, or when finishing
+                        if current_time - last_print_time >= 0.1 or percent >= 99.9:
+                            bar_length = 15
+                            filled_length = int(round(bar_length * min(1.0, segment.end / duration)))
+                            bar = '#' * filled_length + '-' * (bar_length - filled_length)
+                            # Compact output formatting to prevent terminal line wrapping
+                            print(f"\r\033[KProgress: |{bar}| {percent:.1f}% ({int(segment.end)}s/{int(duration)}s)", end="", flush=True)
+                            last_print_time = current_time
+                except Exception:
+                    pass
+                    
+            if duration and isinstance(duration, (int, float)):
+                print()
                 
             raw_text = " ".join(raw_text_parts)
             language = info.language if info else None

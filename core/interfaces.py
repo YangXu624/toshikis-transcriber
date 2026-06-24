@@ -6,12 +6,13 @@ class BaseTranscriber(ABC):
     """Interface for transcription adapters."""
 
     @abstractmethod
-    def transcribe(self, audio_path: Path, **kwargs) -> Transcript:
+    def transcribe(self, audio_path: Path, language: Optional[str] = None, **kwargs) -> Transcript:
         """Transcribe audio from the given file path.
 
         Args:
             audio_path: The filesystem path to the audio file.
-            **kwargs: Extra model-specific transcription options (e.g., language, task, prompt).
+            language: The language code (e.g. 'en') to force transcription in, or None for auto-detect.
+            **kwargs: Extra model-specific transcription options (e.g., task, prompt).
 
         Returns:
             A Transcript object containing text and segment details.

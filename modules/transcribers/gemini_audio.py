@@ -22,7 +22,7 @@ class GeminiAudioTranscriber(BaseTranscriber):
         self.model_name = model_name
         logger.info(f"GeminiAudioTranscriber initialized with model={model_name}")
 
-    def transcribe(self, audio_path: Path, **kwargs) -> Transcript:
+    def transcribe(self, audio_path: Path, language: Optional[str] = None, **kwargs) -> Transcript:
         """Upload audio to Gemini File API and transcribe it using the generative model."""
         logger.info(f"Transcribing audio file with Gemini API: {audio_path}")
         
