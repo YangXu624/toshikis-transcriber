@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 from typing import Tuple
 from pydantic import BaseModel, Field
 
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 class GeminiStructureSchema(BaseModel):
     """Pydantic schema to enforce structured JSON responses from Gemini."""
     presentation: str = Field(description="The exact word-for-word text from the transcript that corresponds to the main presentation. Do not rewrite, edit, or summarize any words.")
-    q_and_a: str = Field(description="The exact word-for-word text from the Q&A session, formatted to label each [Question], [Answer], and [Follow-up]. Do not edit or paraphrase any words.")
+    q_and_a: str = Field(description="The exact word-for-word text from the Q&A session, formatted to label each speaker interaction as [Question]:, [Answer]:, or [Follow-up]:. Do not edit, summarize or rewrite any words. The presentation text must NOT be included here.")
 
 @structurizer_registry.register("gemini")
 class GeminiStructurizer(BaseStructurizer):
@@ -38,6 +39,39 @@ class GeminiStructurizer(BaseStructurizer):
             f"temperature={temperature}, api_key_length={len(api_key)}"
         )
 
+    def _clean_qa_format(self, raw_qa: str) -> str:
+        """Merge consecutive duplicate tags and map [Follow-up] to [Question]."""
+        # Find all matches of [Tag]: content
+        pattern = re.compile(
+            r'\[(Question|Answer|Follow-up)\]:\s*(.*?)(?=\s*\[(?:Question|Answer|Follow-up)\]:|$)', 
+            re.DOTALL
+        )
+        matches = pattern.findall(raw_qa)
+        
+        merged_blocks = []
+        current_type = None
+        current_text = []
+        
+        for tag, content in matches:
+            # Map Follow-up to Question
+            normalized_tag = 'Question' if tag in ('Question', 'Follow-up') else 'Answer'
+            content_clean = content.strip()
+            if not content_clean:
+                continue
+                
+            if normalized_tag == current_type:
+                current_text.append(content_clean)
+            else:
+                if current_type is not None:
+                    merged_blocks.append(f"[{current_type}]: " + " ".join(current_text))
+                current_type = normalized_tag
+                current_text = [content_clean]
+                
+        if current_type is not None and current_text:
+            merged_blocks.append(f"[{current_type}]: " + " ".join(current_text))
+            
+        return "\n".join(merged_blocks)
+
     def structurize(self, transcript: Transcript) -> Tuple[str, str]:
         """Separate Q&A and presentation, returning (presentation_text, structured_qa_text)."""
         logger.info("Structuring transcript using Gemini...")
@@ -58,22 +92,21 @@ class GeminiStructurizer(BaseStructurizer):
             model = genai.GenerativeModel(model_name=self.model_name)
 
             prompt = f"""
-            You are a precise transcription formatting tool.
-            Your task is to take the raw transcript below and separate it into two parts:
-            1. The main presentation section.
-            2. The Q&A (Question & Answer) section.
-
-            For the Q&A section, you must label each speaker interaction using one of these labels:
-            - "[Question]:" for questions asked by the judges, facilitators, or audience.
-            - "[Answer]:" for answers provided by the presenters/team.
-            - "[Follow-up]:" for any follow-up questions, comments, or back-and-forth remarks.
-            - "[Follow-up Response]:" for answers to follow-up questions.
-            Start each label with a new line.
+            You are a precise transcription segmenter and formatter. 
+            Your task is to take the raw transcript below and split it into two distinct parts:
+            1. "presentation": The main presentation section at the beginning. This starts at the very beginning of the transcript and runs continuously until the presentation concludes and a judge/facilitator opens the Q&A session.
+            2. "q_and_a": The Q&A (Question & Answer) session. This starts strictly when the judges, facilitators, or audience members thank the presenters and start asking questions, and continues to the end.
 
             CRITICAL CONSTRAINTS:
+            - The "q_and_a" section must NOT contain any text from the main presentation. It must start strictly where the Q&A starts (e.g., when a judge/moderator says "Okay, thank you team for your presentation..." or starts asking questions).
+            - In the "q_and_a" section, you must label each speaker interaction using one of these labels:
+              - "[Question]:" for questions asked by the judges, facilitators, or audience.
+              - "[Answer]:" for answers provided by the presenters/team.
+              - "[Follow-up]:" for any follow-up questions, comments, or back-and-forth remarks.
+            - Each label (e.g. "[Question]:", "[Answer]:", "[Follow-up]:") must start on a new line (i.e. preceded by a newline character).
             - DO NOT alter, rewrite, paraphrase, summarize, correct, or edit any words from the original transcript.
             - Every single word in the output sections must match the input transcript exactly.
-            - Your only role is to segment the transcript and add labels in the Q&A section. Do not add any of your own commentary, explanations, or introductory text.
+            - Do not add any of your own commentary, explanations, or introductory text.
 
             Transcript:
             \"\"\"
@@ -96,7 +129,8 @@ class GeminiStructurizer(BaseStructurizer):
 
             data = json.loads(response.text)
             presentation_text = data.get("presentation", "").strip()
-            qa_text = data.get("q_and_a", "").strip()
+            raw_qa = data.get("q_and_a", "").strip()
+            qa_text = self._clean_qa_format(raw_qa)
 
             return presentation_text, qa_text
 

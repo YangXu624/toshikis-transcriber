@@ -117,4 +117,4 @@ To prevent hitting API rate limits or wasting GPU/CPU computation, the runner sc
 
 ### C. Rate Limit & Cost Mitigation
 - **Cooldown Delays**: Built-in 20-second sleep intervals in the API-driven loops prevent triggering Gemini's Free Tier Rate Limits (RPM).
-- **Model Aliasing**: The adapters automatically map default configurations to `gemini-flash-latest` (1.5 Flash alias) rather than experimental models to leverage higher daily request quotas.
+- **Model Aliasing**: The adapters automatically map default configurations to `gemini-flash-lite-latest` (1.5 Flash alias) rather than experimental models to leverage higher daily request quotas.

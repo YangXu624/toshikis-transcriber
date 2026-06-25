@@ -1,0 +1,4 @@
+- Make a list of domain-specific words for the transcriber to pick up easier (like STI, RECCs, Fin, etc)
+- Fix the suboptimal structure of the structurizer - make it generate the structured output in one step instead of 2 by changing the gemini prompt
+- Find out how to make the [Question] [Answer] split more accurate - because right now the split is not 100% accurate (though not bad already)
+- Make summarizer, based on Toshiki's requirements on output format

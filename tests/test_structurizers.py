@@ -24,7 +24,7 @@ def test_gemini_scaffold_structurizes_correctly(mocker, sample_transcript):
     pres_text, qa_text = structurizer.structurize(sample_transcript)
 
     assert pres_text == "This is presentation text"
-    assert qa_text == "[Question]: Is it? [Answer]: Yes."
+    assert qa_text == "[Question]: Is it?\n[Answer]: Yes."
     mock_genai.assert_called_once_with(model_name="gemini-2.5-flash")
 
 def test_gemini_scaffold_raises_structurizer_error_on_empty_transcript():
